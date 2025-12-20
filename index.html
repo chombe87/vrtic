@@ -1,0 +1,1001 @@
+<!DOCTYPE html>
+<html lang="sr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Jelovnik - predskolska.rs</title>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #0f172a;
+      --panel: #0b1221;
+      --muted: #94a3b8;
+      --accent: #f97316;
+      --accent-2: #10b981;
+      --line: rgba(255,255,255,0.08);
+      --text: #e2e8f0;
+      --radius: 16px;
+      --shadow: 0 16px 48px rgba(0,0,0,0.32);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: 'Space Grotesk', 'Segoe UI', sans-serif;
+      background: linear-gradient(135deg, #0f172a 0%, #0b1328 40%, #0d1b2f 100%);
+      color: var(--text);
+      padding: 18px 14px 24px;
+    }
+    h1, h2, h3, h4 { margin: 0; }
+    a { color: var(--accent); text-decoration: none; }
+    .page {
+      max-width: 1440px;
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .hero {
+      background: radial-gradient(circle at 20% 20%, rgba(249,115,22,0.12), transparent 45%),
+                  radial-gradient(circle at 80% 0%, rgba(16,185,129,0.16), transparent 40%),
+                  var(--panel);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 14px 18px;
+      box-shadow: var(--shadow);
+    }
+    .eyebrow {
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      font-size: 12px;
+      color: var(--muted);
+      margin-bottom: 8px;
+    }
+    .lede {
+      margin: 12px 0 0;
+      color: #cbd5e1;
+      max-width: 820px;
+      line-height: 1.6;
+    }
+    .meta-row {
+      display: flex;
+      gap: 14px;
+      margin-top: 14px;
+      flex-wrap: wrap;
+      color: var(--muted);
+      font-size: 14px;
+    }
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid var(--line);
+    }
+    .layout {
+      display: grid;
+      grid-template-columns: 1fr 380px;
+      grid-template-areas:
+        "details calendar"
+        "meals   calendar";
+      gap: 12px;
+      align-items: start;
+    }
+    .calendar-panel { grid-area: calendar; }
+    .meals-panel { grid-area: meals; }
+    .details-panel { grid-area: details; }
+    @media (max-width: 960px) {
+      .layout {
+        grid-template-columns: 1fr;
+        grid-template-areas:
+          "details"
+          "calendar"
+          "meals";
+      }
+    }
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 12px 12px 18px;
+      box-shadow: var(--shadow);
+      min-height: 160px;
+    }
+    .details-panel {
+      padding: 8px 10px 10px;
+      min-height: auto;
+    }
+    .panel-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+    .calendar-grid {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 6px;
+    }
+    .calendar-grid .dow {
+      text-align: center;
+      color: var(--muted);
+      font-size: 12px;
+      padding: 4px 0;
+    }
+    .day {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 8px 6px;
+      text-align: center;
+      background: rgba(255,255,255,0.02);
+      color: var(--text);
+      cursor: pointer;
+      transition: transform 0.1s ease, border-color 0.15s ease, background 0.15s ease;
+      position: relative;
+      min-height: 42px;
+      font-size: 14px;
+    }
+    .day:hover { transform: translateY(-2px); border-color: rgba(255,255,255,0.18); }
+    .day.is-selected {
+      border-color: rgba(249,115,22,0.6);
+      box-shadow: 0 0 0 1px rgba(249,115,22,0.35);
+      background: linear-gradient(180deg, rgba(249,115,22,0.14), rgba(249,115,22,0.05));
+    }
+    .day.is-disabled {
+      color: var(--muted);
+      cursor: not-allowed;
+      opacity: 0.5;
+    }
+    .day .bullet {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--accent-2);
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      opacity: 0.85;
+    }
+    .day .bullet.change {
+      background: var(--accent);
+    }
+    .legend {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .legend span {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .chip {
+      width: 12px; height: 12px; border-radius: 50%;
+      display: inline-block;
+      background: var(--accent-2);
+    }
+    .chip-secondary { background: var(--accent); }
+    .day-title {
+      margin: 4px 0 4px;
+      font-size: 20px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .muted { color: var(--muted); }
+    .meal-list {
+      display: grid;
+      gap: 10px;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    }
+    @media (min-width: 900px) {
+      .meal-list { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    }
+    .meal-card {
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 12px 14px;
+      background: rgba(255,255,255,0.02);
+      position: relative;
+    }
+    .meal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 6px;
+    }
+    .meal-label {
+      font-size: 24px;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      color: var(--accent);
+    }
+    .meal-text { 
+      font-weight: bold;
+      margin: 0 0 6px; 
+      line-height: 1.5; 
+      text-transform: lowercase;
+    }
+    .calories {
+      font-size: 13px;
+      color: var(--muted);
+    }
+    .meal-card.is-change {
+      border-color: rgba(249,115,22,0.5);
+      box-shadow: 0 0 0 1px rgba(249,115,22,0.35);
+      background: linear-gradient(180deg, rgba(249,115,22,0.12), rgba(249,115,22,0.05));
+      
+    }
+    .change-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 8px;
+      border-radius: 999px;
+      background: rgba(249,115,22,0.15);
+      border: 1px solid rgba(249,115,22,0.4);
+      color: var(--text);
+      font-size: 12px;
+      letter-spacing: 0.02em;
+    }
+    .units-note {
+      color: var(--muted);
+      font-size: 12px;
+      margin: 4px 0 6px;
+    }
+    .unit-highlight {
+      color: var(--accent-2);
+      font-weight: 700;
+    }
+    .pill-ghost {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 10px;
+      border-radius: 12px;
+      border: 1px solid var(--line);
+      color: var(--muted);
+      font-size: 13px;
+    }
+    .ingredients {
+      margin: 8px 0 0;
+      padding: 0;
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .ingredients.is-collapsed { display: none; }
+    .ingredients li {
+      background: rgba(255,255,255,0.03);
+      border-radius: 10px;
+      padding: 8px 10px;
+      border: 1px solid var(--line);
+    }
+    .match-title { font-weight: 300; text-transform: lowercase; }
+    .match-ingredients {
+      color: var(--muted);
+      font-size: 11px;
+      text-transform: lowercase;
+      margin-top: 4px;      
+    }
+    .ingredients-toggle {
+      background: rgba(255,255,255,0.06);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      color: var(--text);
+      padding: 6px 10px;
+      cursor: pointer;
+      font-size: 12px;
+      margin-top: 8px;
+      transition: border-color 0.15s ease, background 0.15s ease;
+    }
+    .ingredients-toggle:hover {
+      border-color: rgba(255,255,255,0.2);
+      background: rgba(255,255,255,0.08);
+    }
+    .nav {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .nav-btn {
+      background: rgba(255,255,255,0.06);
+      border: 1px solid var(--line);
+      color: var(--text);
+      padding: 6px 10px;
+      border-radius: 10px;
+      cursor: pointer;
+      transition: transform 0.1s ease, border-color 0.15s ease, background 0.15s ease;
+      min-width: 46px;
+    }
+    .nav-btn:hover:not(:disabled) { transform: translateY(-1px); border-color: rgba(255,255,255,0.18); }
+    .nav-btn:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+    .nav-today {
+      background: rgba(249,115,22,0.1);
+      border-color: rgba(249,115,22,0.5);
+    }
+    .changes {
+      margin: 12px 0 18px;
+      padding: 0;
+      list-style: none;
+      display: grid;
+      gap: 8px;
+    }
+    .change-card {
+      border: 1px dashed rgba(249,115,22,0.4);
+      background: rgba(249,115,22,0.06);
+      border-radius: 12px;
+      padding: 10px 12px;
+    }
+    .empty {
+      border: 1px dashed var(--line);
+      border-radius: 12px;
+      padding: 14px;
+      color: var(--muted);
+    }
+    .archive-section {
+      margin-top: 14px;
+    }
+    .archive-controls {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 10px;
+      flex-wrap: wrap;
+    }
+    .archive-search {
+      flex: 1 1 320px;
+      min-width: 240px;
+      max-width: 100%;
+      padding: 10px 12px 10px 36px;
+      border-radius: 10px;
+      border: 1px solid var(--line);
+      background: rgba(255,255,255,0.04);
+      color: var(--text);
+      font-size: 14px;
+      position: relative;
+      width: 100%;
+    }
+    .archive-search-wrap {
+      position: relative;
+      display: inline-block;
+      width: 100%;
+    }
+    .search-icon {
+      position: absolute;
+      left: 12px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--muted);
+      font-size: 14px;
+      pointer-events: none;
+    }
+    .archive-columns {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 12px;
+    }
+    .archive-card {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 10px 12px;
+      background: rgba(255,255,255,0.02);
+    }
+    .archive-card h4 {
+      margin: 0 0 6px;
+      font-size: 15px;
+    }
+    .archive-card p {
+      margin: 0 0 6px;
+      color: var(--muted);
+      line-height: 1.45;
+    }
+    .archive-meta {
+      font-size: 12px;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <section class="hero">
+      <div class="eyebrow">Предшколска • јеловник + измене</div>
+      <h1>Актуелни јеловник и састав намирница</h1>
+      <p class="lede">
+        Изаберите дан у календару, а затим проверите шта се служи за доручак, ужину и ручак.
+        Аутоматски повезујемо сваки оброк са саставом намирница и наглашавамо евентуалне измене из званичног обавештења.
+      </p>
+      <div class="meta-row">
+        <span class="pill">Скуп: <span id="meta-month">-</span></span>
+        <span class="pill">Освежено: <span id="meta-updated">-</span></span>
+      </div>
+    </section>
+
+    <section class="layout">
+      <div class="panel meals-panel">
+        <div class="meal-list" id="meals"></div>
+      </div>
+
+      <div class="panel calendar-panel">
+        <div class="panel-header">
+          <div>
+            <div class="eyebrow">Календар</div>
+            <h2 id="calendar-title">Учитавање...</h2>
+          </div>
+          <div class="legend">
+            <span><span class="chip"></span> јеловник</span>
+            <span><span class="chip chip-secondary"></span> измена</span>
+          </div>
+        </div>
+        <div class="calendar-grid" id="calendar"></div>
+      </div>
+
+      <div class="panel details-panel">
+        <div class="panel-header">
+          <div>
+            <div class="eyebrow">Детаљи дана</div>
+            <div class="day-title" id="day-title">Одаберите дан</div>
+          </div>
+          <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+            <div class="pill-ghost" id="day-weekday"></div>
+            <div class="nav">
+              <button type="button" class="nav-btn" id="nav-prev" aria-label="Претходни дан">‹</button>
+              <button type="button" class="nav-btn" id="nav-next" aria-label="Следећи дан">›</button>
+              <button type="button" class="nav-btn nav-today" id="nav-today">Данас</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="archive-section">
+      <div class="panel">
+        <div class="panel-header" style="margin-bottom:8px;">
+          <div>
+            <div class="eyebrow">Оригинални подаци из ПДФ докумената</div>
+            <h2 style="margin:4px 0;">Комплетан јеловник и састав намирница</h2>
+          </div>
+        </div>
+        <div class="archive-controls">
+          <div class="archive-search-wrap">
+            <span class="search-icon">🔍</span>
+            <input type="text" id="archive-search" class="archive-search" placeholder="Претрага по називу оброка, датуму или намирници..." />
+          </div>
+          <div class="pill-ghost" id="archive-counts"></div>
+        </div>
+        <div class="archive-columns">
+          <div class="archive-card">
+            <h4>Јеловник</h4>
+            <div id="archive-menus"></div>
+          </div>
+          <div class="archive-card">
+            <h4>Састав намирница</h4>
+            <div id="archive-ingredients"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const state = {
+      menu: null,
+      changes: [],
+      changeIndex: {},
+      ingredients: [],
+      daysByDate: new Map(),
+      selectedDate: null,
+      month: null,
+      year: null,
+      meta: null,
+      availableDates: [],
+      todayIso: null,
+      archiveMenus: [],
+    };
+
+    const MEAL_LABELS = { d: "Доручак", u: "Ужина", r: "Ручак" };
+
+    const weekdayNames = ["ПОН", "УТО", "СРЕ", "ЧЕТ", "ПЕТ", "СУБ", "НЕД"];
+    const highlightUnits = ["крцко орашчић", "krčko oraščić", "krc ko oraščić", "krc ko orascic", "крцко орасцић"];
+
+    const calendarEl = document.getElementById("calendar");
+    const calendarTitleEl = document.getElementById("calendar-title");
+    const dayTitleEl = document.getElementById("day-title");
+    const dayWeekdayEl = document.getElementById("day-weekday");
+    const mealsEl = document.getElementById("meals");
+    const metaMonthEl = document.getElementById("meta-month");
+    const metaUpdatedEl = document.getElementById("meta-updated");
+    const navPrevBtn = document.getElementById("nav-prev");
+    const navNextBtn = document.getElementById("nav-next");
+    const navTodayBtn = document.getElementById("nav-today");
+    const archiveMenusEl = document.getElementById("archive-menus");
+    const archiveIngredientsEl = document.getElementById("archive-ingredients");
+    const archiveSearchInput = document.getElementById("archive-search");
+    const archiveCountsEl = document.getElementById("archive-counts");
+
+    function normalizeText(text) {
+      return text
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/[^a-z\u0400-\u04ff0-9\s]+/g, " ")
+        .trim();
+    }
+
+    const STOPWORDS = new Set(["sa", "i", "od", "u", "za", "na", "kroz", "ili", "bez", "po", "se", "je", "su"]);
+
+    const LAT_TO_CYR = [
+      ["nj", "њ"],
+      ["lj", "љ"],
+      ["dž", "џ"],
+      ["dj", "ђ"],
+      ["ć", "ћ"],
+      ["č", "ч"],
+      ["š", "ш"],
+      ["ž", "ж"],
+      ["đ", "ђ"],
+      ["y", "ј"],
+    ];
+
+    function latinToCyr(text) {
+      let t = text.toLowerCase();
+      LAT_TO_CYR.forEach(([lat, cyr]) => {
+        t = t.replaceAll(lat, cyr);
+      });
+      // preostala slova
+      const table = {
+        a: "а", b: "б", c: "ц", d: "д", e: "е", f: "ф", g: "г", h: "х", i: "и",
+        j: "ј", k: "к", l: "л", m: "м", n: "н", o: "о", p: "п", r: "р", s: "с",
+        t: "т", u: "у", v: "в", z: "з",
+      };
+      return t.replace(/[a-z]/g, (ch) => table[ch] || ch);
+    }
+
+    function stripAccents(text) {
+      return text.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    }
+
+    function tokenSet(text) {
+      return new Set(
+        normalizeText(text)
+          .split(/\s+/)
+          .filter((t) => t && t.length >= 3 && !STOPWORDS.has(t))
+      );
+    }
+
+    function buildChangeIndex(entries) {
+      const index = {};
+      entries.forEach((entry) => {
+        if (!index[entry.date]) index[entry.date] = [];
+        index[entry.date].push(entry);
+      });
+      return index;
+    }
+
+    function formatHumanDate(iso) {
+      const [y, m, d] = iso.split("-").map(Number);
+      return `${d.toString().padStart(2, "0")}.${m.toString().padStart(2, "0")}.${y}.`;
+    }
+
+    function renderMeta() {
+      const monthName = new Intl.DateTimeFormat("sr-RS", { month: "long" }).format(
+        new Date(state.year, state.month - 1, 1)
+      );
+      metaMonthEl.textContent = `${monthName} ${state.year}.`;
+      calendarTitleEl.textContent = `${monthName} ${state.year}.`;
+      if (state.meta?.generated_at) {
+        const date = new Date(state.meta.generated_at);
+        metaUpdatedEl.textContent = date.toLocaleString("sr-RS");
+      } else {
+        metaUpdatedEl.textContent = "n/a";
+      }
+    }
+
+    function buildCalendar() {
+      calendarEl.innerHTML = "";
+      weekdayNames.forEach((name) => {
+        const el = document.createElement("div");
+        el.className = "dow";
+        el.textContent = name;
+        calendarEl.appendChild(el);
+      });
+
+      const first = new Date(state.year, state.month - 1, 1);
+      const totalDays = new Date(state.year, state.month, 0).getDate();
+      const offset = (first.getDay() + 6) % 7; // Monday as first day
+
+      for (let i = 0; i < offset; i++) {
+        const spacer = document.createElement("div");
+        calendarEl.appendChild(spacer);
+      }
+
+      const available = new Set(state.menu.days.map((d) => d.date));
+      const changeDays = new Set(Object.keys(state.changeIndex));
+
+      for (let day = 1; day <= totalDays; day++) {
+        const iso = `${state.year}-${String(state.month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "day";
+        btn.textContent = day;
+        if (!available.has(iso)) {
+          btn.classList.add("is-disabled");
+          btn.disabled = true;
+        }
+        if (available.has(iso)) {
+          const bullet = document.createElement("span");
+          bullet.className = "bullet";
+          if (changeDays.has(iso)) bullet.classList.add("change");
+          btn.appendChild(bullet);
+        }
+        btn.dataset.date = iso;
+        btn.addEventListener("click", () => selectDate(iso));
+        calendarEl.appendChild(btn);
+      }
+    }
+
+    function matchIngredients(mealText) {
+      const mealTokens = tokenSet(mealText);
+      const mealString = normalizeText(mealText);
+
+      const scored = state.ingredients.map((item) => {
+        const nameNorm = normalizeText(item.name);
+        const nameTokens = tokenSet(item.name);
+        if (!nameNorm || !mealString) return { item, score: 0 };
+
+        // Strong direct name hit
+        if (nameNorm && nameNorm.length >= 5 && mealString.includes(nameNorm)) {
+          return { item, score: 1 };
+        }
+
+        // Token overlap scoring
+        const overlap = [...nameTokens].filter((t) => mealTokens.has(t));
+        const tokenScore = overlap.length / Math.max(nameTokens.size, mealTokens.size, 1);
+
+        // Boost if there is a long token contained in meal text
+        const longTokenHit = [...nameTokens].some((t) => t.length >= 5 && mealString.includes(t));
+        let score = tokenScore;
+        if (longTokenHit) score += 0.15;
+
+        return { item, score };
+      });
+
+      return scored
+        .filter((s) => s.score >= 0.25) // tighter threshold to avoid nelogične veze
+        .sort((a, b) => b.score - a.score)
+        .slice(0, 3);
+    }
+
+    function renderArchive(term = "") {
+      const query = term.trim().toLowerCase();
+      const cyr = query ? latinToCyr(query) : "";
+      const queryFold = query ? stripAccents(query) : "";
+      const cyrFold = cyr ? stripAccents(cyr) : "";
+      const queries = [query, cyr, queryFold, cyrFold].filter((q) => q);
+
+      const menuHits = state.archiveMenus.filter((entry) => {
+        if (!queries.length) return true;
+        const hay = `${entry.date} ${entry.weekday} ${entry.meals.join(" ")}`.toLowerCase();
+        const hayFold = stripAccents(hay);
+        return queries.some((q) => hay.includes(q) || hayFold.includes(q));
+      });
+
+      const ingredientHits = state.ingredients.filter((item) => {
+        if (!queries.length) return true;
+        const hay = `${item.name} ${item.ingredients.join(" ")}`.toLowerCase();
+        const hayFold = stripAccents(hay);
+        return queries.some((q) => hay.includes(q) || hayFold.includes(q));
+      });
+
+      archiveCountsEl.textContent = `Јеловници: ${menuHits.length} • Намирнице: ${ingredientHits.length}`;
+
+      archiveMenusEl.innerHTML = "";
+      if (!menuHits.length) {
+        archiveMenusEl.innerHTML = '<div class="muted">Нема погодака у јеловнику.</div>';
+      } else {
+        const frag = document.createDocumentFragment();
+        menuHits.forEach((entry) => {
+          const wrap = document.createElement("div");
+          wrap.className = "archive-card";
+          wrap.innerHTML = `<h4>${formatHumanDate(entry.date)} (${entry.weekday})</h4>`;
+          const meta = document.createElement("div");
+          meta.className = "archive-meta";
+          meta.textContent = `${entry.meals.length} оброка`;
+          wrap.appendChild(meta);
+          entry.meals.forEach((m) => {
+            const p = document.createElement("p");
+            p.textContent = m;
+            wrap.appendChild(p);
+          });
+          frag.appendChild(wrap);
+        });
+        archiveMenusEl.appendChild(frag);
+      }
+
+      archiveIngredientsEl.innerHTML = "";
+      if (!ingredientHits.length) {
+        archiveIngredientsEl.innerHTML = '<div class="muted">Нема погодака у намирницама.</div>';
+      } else {
+        const frag = document.createDocumentFragment();
+        ingredientHits.forEach((item) => {
+          const wrap = document.createElement("div");
+          wrap.className = "archive-card";
+          wrap.innerHTML = `<h4>${item.name}</h4>`;
+          const meta = document.createElement("div");
+          meta.className = "archive-meta";
+          meta.textContent = `${item.ingredients.length} састојака`;
+          wrap.appendChild(meta);
+          const p = document.createElement("p");
+          p.textContent = item.ingredients.join(", ");
+          wrap.appendChild(p);
+          frag.appendChild(wrap);
+        });
+        archiveIngredientsEl.appendChild(frag);
+      }
+    }
+
+    function cleanChangeText(text) {
+      const patterns = [
+        /dobijaju.*$/i,
+        /добијају.*$/i,
+      ];
+      let cleaned = text;
+      patterns.forEach((re) => {
+        cleaned = cleaned.replace(re, "").trim();
+      });
+      return cleaned;
+    }
+
+    function trimDuplicateTail(text) {
+      const parts = text.split(",");
+      if (parts.length < 2) return text;
+      const last = parts[parts.length - 1].trim();
+      if (!last) return text;
+      const body = parts.slice(0, -1).join(",").toLowerCase();
+      if (last.length <= 24 && body.includes(last.toLowerCase())) {
+        return parts.slice(0, -1).join(",").trim();
+      }
+      return text;
+    }
+
+    function renderMeals(day) {
+      mealsEl.innerHTML = "";
+
+      const changeEntries = state.changeIndex[state.selectedDate] || [];
+      const changeByCode = {};
+      changeEntries.forEach((entry) => {
+        (entry.meals || []).forEach((meal) => {
+          const code = meal.code || "";
+          if (!code) return;
+          if (!changeByCode[code]) changeByCode[code] = [];
+          changeByCode[code].push(meal);
+        });
+      });
+
+      const baseMeals = day?.meals || [];
+      const combined = [];
+      const changeSeen = new Set();
+
+      baseMeals.forEach((meal) => {
+        const overrides = changeByCode[meal.code];
+        if (overrides?.length) {
+          overrides.forEach((m) => combined.push({ ...m, code: meal.code, isChange: true }));
+          changeSeen.add(meal.code);
+        } else {
+          combined.push(meal);
+        }
+      });
+
+      Object.entries(changeByCode).forEach(([code, list]) => {
+        if (!changeSeen.has(code)) {
+          list.forEach((m) => combined.push({ ...m, code, isChange: true }));
+        }
+      });
+
+      if (!combined.length) {
+        const empty = document.createElement("div");
+        empty.className = "empty";
+        empty.textContent = "Nema podataka za ovaj dan.";
+        mealsEl.appendChild(empty);
+        return;
+      }
+
+      const counts = combined.reduce((acc, meal) => {
+        acc[meal.code] = (acc[meal.code] || 0) + 1;
+        return acc;
+      }, {});
+      const seen = {};
+
+      combined.forEach((meal) => {
+        seen[meal.code] = (seen[meal.code] || 0) + 1;
+        const card = document.createElement("div");
+        card.className = "meal-card";
+        if (meal.isChange) card.classList.add("is-change");
+        const header = document.createElement("div");
+        header.className = "meal-header";
+        const label = document.createElement("div");
+        const suffix = counts[meal.code] > 1 ? ` #${seen[meal.code]}` : "";
+        label.className = "meal-label";
+        label.textContent = `${MEAL_LABELS[meal.code] || "Obrok"}${suffix}`;
+        header.appendChild(label);
+        if (meal.calories?.length && !meal.isChange) {
+          const cal = document.createElement("div");
+          cal.className = "calories";
+          cal.textContent = `${meal.calories.join(" / ")} kcal`;
+          header.appendChild(cal);
+        }
+        if (meal.isChange) {
+          const badge = document.createElement("div");
+          badge.className = "change-badge";
+          badge.textContent = "IZMENA";
+          header.appendChild(badge);
+        }
+        card.appendChild(header);
+
+        const text = document.createElement("p");
+        text.className = "meal-text";
+        const displayText = trimDuplicateTail(meal.isChange ? cleanChangeText(meal.text) : meal.text);
+        text.textContent = displayText;
+        card.appendChild(text);
+
+        if (meal.affected_units?.length) {
+          const units = document.createElement("div");
+          units.className = "units-note";
+          const unitsList = meal.affected_units.map((u) => {
+            const match = highlightUnits.includes(u.toLowerCase());
+            return match ? `<span class="unit-highlight">${u}</span>` : u;
+          });
+          units.innerHTML = `Vrtići: ${unitsList.join(", ")}`;
+          card.appendChild(units);
+        }
+
+        const matches = matchIngredients(meal.text);
+        const ingWrapper = document.createElement("div");
+        const toggleBtn = document.createElement("button");
+        toggleBtn.type = "button";
+        toggleBtn.className = "ingredients-toggle";
+        toggleBtn.textContent = "прикажи пронађене саставе намирница";
+
+        const matchList = document.createElement("ul");
+        matchList.className = "ingredients is-collapsed";
+        if (!matches.length) {
+          const none = document.createElement("li");
+          none.className = "muted";
+          none.textContent = "Нема директног поклапања у листи намирница.";
+          matchList.appendChild(none);
+          toggleBtn.style.display = "none";
+        } else {
+          matches.forEach((match) => {
+            const li = document.createElement("li");
+            const title = document.createElement("div");
+            title.className = "match-title";
+            title.textContent = match.item.name;
+            li.appendChild(title);
+            if (match.item.ingredients?.length) {
+              const ing = document.createElement("div");
+              ing.className = "match-ingredients";
+              ing.textContent = match.item.ingredients.join(", ");
+              li.appendChild(ing);
+            }
+            matchList.appendChild(li);
+          });
+        }
+
+        toggleBtn.addEventListener("click", () => {
+          const collapsed = matchList.classList.toggle("is-collapsed");
+          toggleBtn.textContent = collapsed ? "прикажи пронађене саставе намирница" : "сакриј";
+        });
+
+        ingWrapper.appendChild(toggleBtn);
+        ingWrapper.appendChild(matchList);
+        card.appendChild(ingWrapper);
+        mealsEl.appendChild(card);
+      });
+    }
+
+    function selectDate(isoDate) {
+      state.selectedDate = isoDate;
+      document.querySelectorAll(".day").forEach((btn) => {
+        if (btn.dataset.date === isoDate) btn.classList.add("is-selected");
+        else btn.classList.remove("is-selected");
+      });
+      const day = state.daysByDate.get(isoDate);
+      dayTitleEl.textContent = formatHumanDate(isoDate);
+      dayWeekdayEl.textContent = day?.weekday || "";
+      renderMeals(day);
+      updateNavButtons();
+    }
+
+    function updateNavButtons() {
+      const idx = state.availableDates.indexOf(state.selectedDate);
+      navPrevBtn.disabled = idx <= 0;
+      navNextBtn.disabled = idx === -1 || idx >= state.availableDates.length - 1;
+      navTodayBtn.disabled = !state.daysByDate.has(state.todayIso) || state.selectedDate === state.todayIso;
+    }
+
+    function stepDay(direction) {
+      const idx = state.availableDates.indexOf(state.selectedDate);
+      if (idx === -1) return;
+      const nextIdx = idx + direction;
+      if (nextIdx < 0 || nextIdx >= state.availableDates.length) return;
+      selectDate(state.availableDates[nextIdx]);
+    }
+
+    async function fetchJson(path) {
+      const resp = await fetch(path);
+      if (!resp.ok) throw new Error(`Ne mogu da učitam ${path}`);
+      return resp.json();
+    }
+
+    function setDefaultDate() {
+      const isoToday = state.todayIso;
+      const fallback = state.menu.days[0]?.date;
+      const dateToUse = state.daysByDate.has(isoToday) ? isoToday : fallback;
+      if (dateToUse) {
+        selectDate(dateToUse);
+      }
+    }
+
+    async function init() {
+      try {
+        const [menu, changes, ingredients, metadata] = await Promise.all([
+          fetchJson("data/monthly_menu.json"),
+          fetchJson("data/menu_changes.json"),
+          fetchJson("data/ingredients.json"),
+          fetchJson("data/metadata.json").catch(() => null),
+        ]);
+        state.menu = menu;
+        state.changes = changes.entries || [];
+        state.changeIndex = buildChangeIndex(state.changes);
+        state.ingredients = ingredients.items || [];
+        state.meta = metadata;
+        state.month = menu.month;
+        state.year = menu.year;
+        state.daysByDate = new Map(menu.days.map((d) => [d.date, d]));
+        state.availableDates = [...state.daysByDate.keys()].sort();
+        const today = new Date();
+        state.todayIso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(
+          today.getDate()
+        ).padStart(2, "0")}`;
+        state.archiveMenus = menu.days.map((d) => ({
+          date: d.date,
+          weekday: d.weekday,
+          meals: d.meals.map((m) => m.text),
+        }));
+
+        renderMeta();
+        buildCalendar();
+        setDefaultDate();
+        updateNavButtons();
+        renderArchive();
+      } catch (err) {
+        console.error(err);
+        calendarTitleEl.textContent = "Грешка при учитавању података";
+        dayTitleEl.textContent = "Није могуће учитати податке";
+        mealsEl.innerHTML = `<div class="empty">Проверите JSON фајлове у /data директоријуму или покрените fetch_menu.py.</div>`;
+      }
+    }
+
+    navPrevBtn.addEventListener("click", () => stepDay(-1));
+    navNextBtn.addEventListener("click", () => stepDay(1));
+    navTodayBtn.addEventListener("click", () => {
+      if (state.daysByDate.has(state.todayIso)) {
+        selectDate(state.todayIso);
+      }
+    });
+    archiveSearchInput.addEventListener("input", (e) => renderArchive(e.target.value));
+
+    init();
+  </script>
+</body>
+</html>
