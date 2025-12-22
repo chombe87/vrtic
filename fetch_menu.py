@@ -14,6 +14,7 @@ import io
 import json
 import pathlib
 import re
+import subprocess
 from typing import Dict, Iterable, List, Optional
 
 import pdfplumber
@@ -320,6 +321,11 @@ def parse_args() -> argparse.Namespace:
         help="URL PDF-a sa sastavom namirnica.",
     )
     parser.add_argument("--output-dir", default="data", help="Direktorijum za JSON izlaz.")
+    parser.add_argument(
+        "--git-push",
+        action="store_true",
+        help='Na kraju pokreni "git commit -am" sa timestamp porukom i "git push".',
+    )
     return parser.parse_args()
 
 
@@ -360,6 +366,17 @@ def main() -> None:
     }
     write_json(output_dir / "metadata.json", meta)
     print(f"[4/4] Završeno. JSON fajlovi su u {output_dir.resolve()}")
+
+    if args.git_push:
+        try:
+            ts = dt.datetime.now().strftime("%Y-%m-%d %H:%M")
+            msg = f"json refresh {ts}"
+            subprocess.run(["git", "add", "."], check=False)
+            subprocess.run(["git", "commit", "-am", msg], check=False)
+            subprocess.run(["git", "push"], check=False)
+            print("[git] commit/push odrađen.")
+        except Exception as exc:
+            print(f"[git] Greška pri commit/push: {exc}")
 
 
 if __name__ == "__main__":
