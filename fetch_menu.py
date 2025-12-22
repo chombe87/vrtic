@@ -381,8 +381,8 @@ def main() -> None:
                 return
             only_meta = changed_files == {"data/metadata.json"} or changed_files == {"metadata.json"}
             if only_meta:
-                subprocess.run(["git", "reset", "--hard"], check=False)
-                print("[git] Samo metadata izmena, radim git reset --hard umesto commita.")
+                #subprocess.run(["git", "reset", "--hard"], check=False)
+                print("[git] Samo metadata izmena, ne radim ništa")
                 return
             ts = dt.datetime.now().strftime("%Y-%m-%d %H:%M")
             msg = f"json refresh {ts}"
