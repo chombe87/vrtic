@@ -949,10 +949,10 @@
     async function init() {
       try {
         const [menu, changes, ingredients, metadata] = await Promise.all([
-          fetchJson("data/monthly_menu.json"),
-          fetchJson("data/menu_changes.json"),
-          fetchJson("data/ingredients.json"),
-          fetchJson("data/metadata.json").catch(() => null),
+          fetchJson("https://raw.githubusercontent.com/chombe87/vrtic/refs/heads/main/data/monthly_menu.json"),
+          fetchJson("https://raw.githubusercontent.com/chombe87/vrtic/refs/heads/main/data/menu_changes.json"),
+          fetchJson("https://raw.githubusercontent.com/chombe87/vrtic/refs/heads/main/data/ingredients.json"),
+          fetchJson("https://raw.githubusercontent.com/chombe87/vrtic/refs/heads/main/data/metadata.json").catch(() => null),
         ]);
         state.menu = menu;
         state.changes = changes.entries || [];
