@@ -369,6 +369,21 @@ def main() -> None:
 
     if args.git_push:
         try:
+            status = subprocess.run(
+                ["git", "status", "--porcelain"],
+                capture_output=True,
+                text=True,
+                check=False,
+            ).stdout.strip().splitlines()
+            changed_files = {line.strip().split(maxsplit=1)[-1] for line in status if line.strip()}
+            if not changed_files:
+                print("[git] Nema izmena za commit.")
+                return
+            only_meta = changed_files == {"data/metadata.json"} or changed_files == {"metadata.json"}
+            if only_meta:
+                subprocess.run(["git", "reset", "--hard"], check=False)
+                print("[git] Samo metadata izmena, radim git reset --hard umesto commita.")
+                return
             ts = dt.datetime.now().strftime("%Y-%m-%d %H:%M")
             msg = f"json refresh {ts}"
             subprocess.run(["git", "add", "."], check=False)
