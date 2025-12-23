@@ -1,0 +1,70 @@
+{
+  "generated_at": "2025-12-22T17:39:15.442104Z",
+  "oblasti": {
+    "sport": {
+      "fudbal": {
+        "stadioni": [
+          {
+            "naziv": "Camp Nou",
+            "grad": "Barcelona",
+            "drzava": "?panija",
+            "kapacitet": 99354
+          },
+          {
+            "naziv": "Santiago Bernab?u",
+            "grad": "Madrid",
+            "drzava": "?panija",
+            "kapacitet": 81044
+          },
+          {
+            "naziv": "Old Trafford",
+            "grad": "Manchester",
+            "drzava": "Engleska",
+            "kapacitet": 74310
+          },
+          {
+            "naziv": "Allianz Arena",
+            "grad": "Minhen",
+            "drzava": "Nema?ka",
+            "kapacitet": 75000
+          },
+          {
+            "naziv": "Marakana (Rajko Miti?)",
+            "grad": "Beograd",
+            "drzava": "Srbija",
+            "kapacitet": 53898
+          }
+        ],
+        "lige": [
+          {
+            "naziv": "Premier League",
+            "drzava": "Engleska"
+          },
+          {
+            "naziv": "La Liga",
+            "drzava": "?panija"
+          },
+          {
+            "naziv": "Serie A",
+            "drzava": "Italija"
+          },
+          {
+            "naziv": "Bundesliga",
+            "drzava": "Nema?ka"
+          },
+          {
+            "naziv": "Ligue 1",
+            "drzava": "Francuska"
+          },
+          {
+            "naziv": "SuperLiga",
+            "drzava": "Srbija"
+          }
+        ]
+      }
+    },
+    "geografija": {
+      "glavni_gradovi": []
+    }
+  }
+}
