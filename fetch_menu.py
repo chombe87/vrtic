@@ -308,11 +308,11 @@ def write_json(path: pathlib.Path, data: Dict) -> None:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Preuzimanje i parsiranje jelovnika.")
-    parser.add_argument("--year", type=int, default=2025, help="Godina jelovnika (default 2025).")
-    parser.add_argument("--month", type=int, default=12, help="Mesec jelovnika (default 12).")
+    parser.add_argument("--year", type=int, default=2026, help="Godina jelovnika (default 2026).")
+    parser.add_argument("--month", type=int, default=1, help="Mesec jelovnika (default 1).")
     parser.add_argument(
         "--menu-pdf-url",
-        default="https://www.predskolska.rs/wp-content/uploads/2025/11/%D0%88%D0%95%D0%9B%D0%9E%D0%92%D0%9D%D0%98%D0%9A-%D0%97%D0%90-%D0%94%D0%95%D0%A6%D0%95%D0%9C%D0%91%D0%90%D0%A0-2025.pdf",
+        default="https://www.predskolska.rs/wp-content/uploads/2025/12/%D0%88%D0%95%D0%9B%D0%9E%D0%92%D0%9D%D0%98%D0%9A-%D0%97%D0%90-%D0%88%D0%90%D0%9D%D0%A3%D0%90%D0%A0-2026.pdf",
         help="URL PDF-a sa mesečnim jelovnikom.",
     )
     parser.add_argument(
