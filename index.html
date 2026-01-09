@@ -938,9 +938,23 @@
     }
 
     function setDefaultDate() {
-      const isoToday = state.todayIso;
       const fallback = state.menu.days[0]?.date;
-      const dateToUse = state.daysByDate.has(isoToday) ? isoToday : fallback;
+      const nextBusiness = (() => {
+        const d = new Date();
+        d.setDate(d.getDate() + 1);
+        for (let i = 0; i < 60; i++) {
+          const day = d.getDay();
+          const iso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
+            d.getDate()
+          ).padStart(2, "0")}`;
+          if (day >= 1 && day <= 5 && state.daysByDate.has(iso)) {
+            return iso;
+          }
+          d.setDate(d.getDate() + 1);
+        }
+        return null;
+      })();
+      const dateToUse = nextBusiness || fallback;
       if (dateToUse) {
         selectDate(dateToUse);
       }
