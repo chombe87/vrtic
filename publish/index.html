@@ -243,6 +243,18 @@
       font-size: 12px;
       letter-spacing: 0.02em;
     }
+    .original-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 8px;
+      border-radius: 999px;
+      background: rgba(148,163,184,0.16);
+      border: 1px solid rgba(148,163,184,0.4);
+      color: var(--text);
+      font-size: 12px;
+      letter-spacing: 0.02em;
+    }
     .units-note {
       color: var(--muted);
       font-size: 12px;
@@ -789,6 +801,11 @@
       baseMeals.forEach((meal) => {
         const overrides = changeByCode[meal.code];
         if (overrides?.length) {
+          const hasScopedChange = overrides.some((m) => (m.affected_units || []).length);
+          const hasGlobalChange = overrides.some((m) => !(m.affected_units || []).length);
+          if (hasScopedChange && !hasGlobalChange) {
+            combined.push({ ...meal, isOriginal: true });
+          }
           overrides.forEach((m) => combined.push({ ...m, code: meal.code, isChange: true }));
           changeSeen.add(meal.code);
         } else {
@@ -838,6 +855,12 @@
           const badge = document.createElement("div");
           badge.className = "change-badge";
           badge.textContent = "IZMENA";
+          header.appendChild(badge);
+        }
+        if (meal.isOriginal) {
+          const badge = document.createElement("div");
+          badge.className = "original-badge";
+          badge.textContent = "ORIGINAL";
           header.appendChild(badge);
         }
         card.appendChild(header);
