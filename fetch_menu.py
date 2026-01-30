@@ -2,8 +2,8 @@
 Fetches the current menu data for predskolska.rs, parses it, and writes JSON
 artifacts that the front-end (index.html) can consume.
 
-By default the script targets December 2025 assets called out in the
-instructions, but month/year and source URLs are configurable via CLI flags.
+By default the script targets the configured month/year, discovers the monthly
+menu PDF from the monthly page, and lets you override source URLs via CLI flags.
 """
 
 from __future__ import annotations
@@ -15,6 +15,7 @@ import json
 import pathlib
 import re
 import subprocess
+import urllib.parse
 from typing import Dict, Iterable, List, Optional
 
 import pdfplumber
@@ -152,6 +153,51 @@ def parse_menu_changes(html: str) -> Dict:
             current_day["raw"].append(line)
 
     return {"entries": entries}
+
+
+def find_monthly_menu_pdf_url(html: str, page_url: str) -> Optional[str]:
+    soup = BeautifulSoup(html, "html.parser")
+    container = soup.select_one("article .entry-content") or soup
+
+    def is_pdf(href: str) -> bool:
+        return ".pdf" in href.lower()
+
+    def resolve(href: str) -> str:
+        return urllib.parse.urljoin(page_url, href)
+
+    marker = None
+    for tag in container.find_all(["h1", "h2", "h3", "h4", "p", "strong", "b", "span", "div"]):
+        text = clean_spaces(tag.get_text(" ", strip=True))
+        if not text:
+            continue
+        normalized = normalize_for_match(text)
+        lowered = text.lower()
+        if "izmena jelovnika" in normalized or "измена јеловника" in lowered:
+            marker = tag
+            break
+
+    if marker:
+        for link in marker.find_all_next("a", href=True):
+            href = link["href"].strip()
+            if href and is_pdf(href):
+                return resolve(href)
+
+    pdf_links = []
+    for link in container.find_all("a", href=True):
+        href = link["href"].strip()
+        if href and is_pdf(href):
+            pdf_links.append((href, link.get_text(" ", strip=True)))
+
+    for href, text in pdf_links:
+        text_norm = normalize_for_match(text)
+        href_norm = normalize_for_match(urllib.parse.unquote(href))
+        if "jelovnik" in text_norm or "jelovnik" in href_norm:
+            return resolve(href)
+
+    if pdf_links:
+        return resolve(pdf_links[0][0])
+
+    return None
 
 
 def extract_pdf_lines(pdf_bytes: bytes) -> List[str]:
@@ -312,8 +358,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--month", type=int, default=1, help="Mesec jelovnika (default 1).")
     parser.add_argument(
         "--menu-pdf-url",
-        default="https://www.predskolska.rs/wp-content/uploads/2025/12/%D0%88%D0%95%D0%9B%D0%9E%D0%92%D0%9D%D0%98%D0%9A-%D0%97%D0%90-%D0%88%D0%90%D0%9D%D0%A3%D0%90%D0%A0-2026.pdf",
-        help="URL PDF-a sa mesečnim jelovnikom.",
+        default=None,
+        help="URL PDF-a sa mesecnim jelovnikom (ako nije zadat, uzima se sa stranice).",
     )
     parser.add_argument(
         "--ingredients-pdf-url",
@@ -340,12 +386,14 @@ def main() -> None:
     menu_changes.update({"source": page_url, "year": args.year, "month": args.month})
     write_json(output_dir / "menu_changes.json", menu_changes)
 
-    print(f"[2/4] Preuzimam PDF jelovnika sa {args.menu_pdf_url}")
-    monthly_pdf_bytes = fetch_bytes(args.menu_pdf_url)
+    menu_pdf_url = args.menu_pdf_url or find_monthly_menu_pdf_url(menu_changes_html, page_url)
+    if not menu_pdf_url:
+        raise RuntimeError("Nije pronadjen PDF jelovnika na stranici i URL nije prosledjen.")
+
+    print(f"[2/4] Preuzimam PDF jelovnika sa {menu_pdf_url}")
+    monthly_pdf_bytes = fetch_bytes(menu_pdf_url)
     monthly_menu = parse_monthly_menu(monthly_pdf_bytes)
-    monthly_menu.update(
-        {"source": args.menu_pdf_url, "year": args.year, "month": args.month}
-    )
+    monthly_menu.update({"source": menu_pdf_url, "year": args.year, "month": args.month})
     write_json(output_dir / "monthly_menu.json", monthly_menu)
 
     print(f"[3/4] Preuzimam PDF sastava namirnica sa {args.ingredients_pdf_url}")
@@ -360,7 +408,7 @@ def main() -> None:
         "year": args.year,
         "sources": {
             "page": page_url,
-            "menu_pdf": args.menu_pdf_url,
+            "menu_pdf": menu_pdf_url,
             "ingredients_pdf": args.ingredients_pdf_url,
         },
     }
