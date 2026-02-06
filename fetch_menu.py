@@ -155,7 +155,9 @@ def parse_menu_changes(html: str) -> Dict:
     return {"entries": entries}
 
 
-def find_monthly_menu_pdf_url(html: str, page_url: str) -> Optional[str]:
+def find_pdf_urls_after_marker(
+    html: str, page_url: str, keywords: Iterable[str], max_links: int = 3
+) -> List[str]:
     soup = BeautifulSoup(html, "html.parser")
     container = soup.select_one("article .entry-content") or soup
 
@@ -165,6 +167,9 @@ def find_monthly_menu_pdf_url(html: str, page_url: str) -> Optional[str]:
     def resolve(href: str) -> str:
         return urllib.parse.urljoin(page_url, href)
 
+    normalized_keywords = [normalize_for_match(k) for k in keywords]
+    lowered_keywords = [k.lower() for k in keywords]
+
     marker = None
     for tag in container.find_all(["h1", "h2", "h3", "h4", "p", "strong", "b", "span", "div"]):
         text = clean_spaces(tag.get_text(" ", strip=True))
@@ -172,15 +177,20 @@ def find_monthly_menu_pdf_url(html: str, page_url: str) -> Optional[str]:
             continue
         normalized = normalize_for_match(text)
         lowered = text.lower()
-        if "izmena jelovnika" in normalized or "измена јеловника" in lowered:
+        if any(k in normalized for k in normalized_keywords) or any(k in lowered for k in lowered_keywords):
             marker = tag
             break
 
+    pdf_links: List[str] = []
     if marker:
         for link in marker.find_all_next("a", href=True):
             href = link["href"].strip()
             if href and is_pdf(href):
-                return resolve(href)
+                pdf_links.append(resolve(href))
+                if len(pdf_links) >= max_links:
+                    break
+        if pdf_links:
+            return pdf_links
 
     pdf_links = []
     for link in container.find_all("a", href=True):
@@ -191,13 +201,24 @@ def find_monthly_menu_pdf_url(html: str, page_url: str) -> Optional[str]:
     for href, text in pdf_links:
         text_norm = normalize_for_match(text)
         href_norm = normalize_for_match(urllib.parse.unquote(href))
-        if "jelovnik" in text_norm or "jelovnik" in href_norm:
-            return resolve(href)
+        if any(k in text_norm for k in normalized_keywords) or any(
+            k in href_norm for k in normalized_keywords
+        ):
+            return [resolve(href)]
 
     if pdf_links:
-        return resolve(pdf_links[0][0])
+        return [resolve(pdf_links[0][0])]
 
-    return None
+    return []
+
+
+def find_monthly_menu_pdf_url(html: str, page_url: str) -> Optional[str]:
+    links = find_pdf_urls_after_marker(
+        html,
+        page_url,
+        ["izmena jelovnika", "jelovnik", "измена јеловника"],
+    )
+    return links[0] if links else None
 
 
 def extract_pdf_lines(pdf_bytes: bytes) -> List[str]:
@@ -346,6 +367,11 @@ def parse_ingredients(pdf_bytes: bytes) -> Dict:
     return {"items": items}
 
 
+def parse_allergens(pdf_bytes: bytes) -> Dict:
+    lines = extract_pdf_lines(pdf_bytes)
+    return {"lines": lines}
+
+
 def write_json(path: pathlib.Path, data: Dict) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", encoding="utf-8") as fh:
@@ -363,8 +389,13 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--ingredients-pdf-url",
-        default="https://www.predskolska.rs/wp-content/uploads/2024/12/%D0%A1%D0%90%D0%A1%D0%A2%D0%90%D0%92-%D0%9D%D0%90%D0%9C%D0%98%D0%A0%D0%9D%D0%98%D0%A6%D0%90-%D0%A3-%D0%88%D0%95%D0%9B%D0%98%D0%9C%D0%90-13.12.2024.pdf",
-        help="URL PDF-a sa sastavom namirnica.",
+        default=None,
+        help="URL PDF-a sa sastavom namirnica (ako nije zadat, uzima se sa stranice).",
+    )
+    parser.add_argument(
+        "--allergens-pdf-url",
+        default=None,
+        help="URL PDF-a sa alergen info (ako nije zadat, uzima se sa stranice).",
     )
     parser.add_argument("--output-dir", default="data", help="Direktorijum za JSON izlaz.")
     parser.add_argument(
@@ -380,27 +411,75 @@ def main() -> None:
     output_dir = pathlib.Path(args.output_dir)
 
     page_url = month_page_url(args.year, args.month)
-    print(f"[1/4] Preuzimam izmenu jelovnika sa {page_url}")
+    print(f"[1/5] Preuzimam izmenu jelovnika sa {page_url}")
     menu_changes_html = fetch_html(page_url)
     menu_changes = parse_menu_changes(menu_changes_html)
     menu_changes.update({"source": page_url, "year": args.year, "month": args.month})
     write_json(output_dir / "menu_changes.json", menu_changes)
 
-    menu_pdf_url = args.menu_pdf_url or find_monthly_menu_pdf_url(menu_changes_html, page_url)
+    pdf_links = find_pdf_urls_after_marker(
+        menu_changes_html, page_url, ["izmena jelovnika", "измена јеловника"], max_links=3
+    )
+
+    menu_pdf_url = args.menu_pdf_url or (pdf_links[0] if len(pdf_links) > 0 else None)
+    if not menu_pdf_url:
+        menu_pdf_url = find_monthly_menu_pdf_url(menu_changes_html, page_url)
     if not menu_pdf_url:
         raise RuntimeError("Nije pronadjen PDF jelovnika na stranici i URL nije prosledjen.")
 
-    print(f"[2/4] Preuzimam PDF jelovnika sa {menu_pdf_url}")
+    print(f"[2/5] Preuzimam PDF jelovnika sa {menu_pdf_url}")
     monthly_pdf_bytes = fetch_bytes(menu_pdf_url)
     monthly_menu = parse_monthly_menu(monthly_pdf_bytes)
     monthly_menu.update({"source": menu_pdf_url, "year": args.year, "month": args.month})
     write_json(output_dir / "monthly_menu.json", monthly_menu)
 
-    print(f"[3/4] Preuzimam PDF sastava namirnica sa {args.ingredients_pdf_url}")
-    ingredients_pdf_bytes = fetch_bytes(args.ingredients_pdf_url)
+    ingredients_pdf_url = args.ingredients_pdf_url or (pdf_links[1] if len(pdf_links) > 1 else None)
+    if not ingredients_pdf_url:
+        fallback = find_pdf_urls_after_marker(
+            menu_changes_html,
+            page_url,
+            [
+                "sastav namirnica",
+                "sastav namirnica u jelima",
+                "namirnica",
+                "namirnice",
+            ],
+            max_links=1,
+        )
+        ingredients_pdf_url = fallback[0] if fallback else None
+    if not ingredients_pdf_url:
+        raise RuntimeError("Nije pronadjen PDF sastava namirnica na stranici i URL nije prosledjen.")
+
+    print(f"[3/5] Preuzimam PDF sastava namirnica sa {ingredients_pdf_url}")
+    ingredients_pdf_bytes = fetch_bytes(ingredients_pdf_url)
     ingredients = parse_ingredients(ingredients_pdf_bytes)
-    ingredients.update({"source": args.ingredients_pdf_url})
+    ingredients.update({"source": ingredients_pdf_url})
     write_json(output_dir / "ingredients.json", ingredients)
+
+    allergens_pdf_url = args.allergens_pdf_url or (pdf_links[2] if len(pdf_links) > 2 else None)
+    if not allergens_pdf_url:
+        fallback = find_pdf_urls_after_marker(
+            menu_changes_html,
+            page_url,
+            [
+                "alergen",
+                "alergeni",
+                "alergen info",
+                "informacije o alergenima",
+                "\u0430\u043b\u0435\u0440\u0433\u0435\u043d",
+                "\u0430\u043b\u0435\u0440\u0433\u0435\u043d\u0438",
+            ],
+            max_links=1,
+        )
+        allergens_pdf_url = fallback[0] if fallback else None
+    if not allergens_pdf_url:
+        raise RuntimeError("Nije pronadjen PDF sa alergen info na stranici i URL nije prosledjen.")
+
+    print(f"[4/5] Preuzimam PDF alergen info sa {allergens_pdf_url}")
+    allergens_pdf_bytes = fetch_bytes(allergens_pdf_url)
+    allergens = parse_allergens(allergens_pdf_bytes)
+    allergens.update({"source": allergens_pdf_url})
+    write_json(output_dir / "allergens.json", allergens)
 
     meta = {
         "generated_at": dt.datetime.now(dt.timezone.utc).isoformat(),
@@ -409,11 +488,12 @@ def main() -> None:
         "sources": {
             "page": page_url,
             "menu_pdf": menu_pdf_url,
-            "ingredients_pdf": args.ingredients_pdf_url,
+            "ingredients_pdf": ingredients_pdf_url,
+            "allergens_pdf": allergens_pdf_url,
         },
     }
     write_json(output_dir / "metadata.json", meta)
-    print(f"[4/4] Završeno. JSON fajlovi su u {output_dir.resolve()}")
+    print(f"[5/5] Završeno. JSON fajlovi su u {output_dir.resolve()}")
 
     if args.git_push:
         try:
