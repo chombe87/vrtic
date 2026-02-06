@@ -368,8 +368,205 @@ def parse_ingredients(pdf_bytes: bytes) -> Dict:
 
 
 def parse_allergens(pdf_bytes: bytes) -> Dict:
-    lines = extract_pdf_lines(pdf_bytes)
-    return {"lines": lines}
+    def normalize_cell(value: Optional[str]) -> str:
+        return clean_spaces(value or "")
+
+    def is_header_row(row: List[str]) -> bool:
+        joined = " ".join(cell for cell in row if cell)
+        return "namirnica" in normalize_for_match(joined)
+
+    def parse_table_row(row: List[str], header: List[str]) -> Optional[Dict]:
+        cells = [normalize_cell(cell) for cell in row]
+        if not any(cells):
+            return None
+        name = cells[0]
+        flags = []
+        for cell in cells[1 : len(header)]:
+            flags.append("*" in cell)
+        return {"name": name, "flags": flags}
+
+    def extract_tables(page: pdfplumber.page.Page) -> List[List[List[str]]]:
+        settings = {
+            "vertical_strategy": "lines",
+            "horizontal_strategy": "lines",
+            "intersection_tolerance": 5,
+            "snap_tolerance": 3,
+            "join_tolerance": 3,
+            "edge_min_length": 3,
+            "min_words_vertical": 1,
+            "min_words_horizontal": 1,
+        }
+        try:
+            tables = page.extract_tables(table_settings=settings) or []
+        except TypeError:
+            try:
+                tables = page.extract_tables(settings=settings) or []
+            except TypeError:
+                tables = page.extract_tables() or []
+        if tables:
+            return tables
+        return page.extract_tables() or []
+
+    def parse_by_positions(
+        page: pdfplumber.page.Page, header: Optional[List[str]]
+    ) -> (Optional[List[str]], List[Dict]):
+        words = page.extract_words(extra_attrs=["x0", "x1", "top", "bottom"])
+        if not words:
+            return header, []
+
+        words.sort(key=lambda w: (w["top"], w["x0"]))
+        lines: List[List[Dict]] = []
+        current: List[Dict] = []
+        current_top: Optional[float] = None
+        for word in words:
+            if current_top is None or abs(word["top"] - current_top) <= 3:
+                current.append(word)
+                current_top = word["top"] if current_top is None else current_top
+            else:
+                lines.append(current)
+                current = [word]
+                current_top = word["top"]
+        if current:
+            lines.append(current)
+
+        header_idx = None
+        for idx, line in enumerate(lines):
+            text = clean_spaces(" ".join(w["text"] for w in line))
+            if "namirnica" in normalize_for_match(text):
+                header_idx = idx
+                break
+
+        if header_idx is None:
+            return header, []
+
+        header_lines: List[List[Dict]] = []
+        for line in lines[header_idx : header_idx + 5]:
+            text = clean_spaces(" ".join(w["text"] for w in line))
+            if "*" in text:
+                break
+            header_lines.append(line)
+
+        header_words = [w for line in header_lines for w in line]
+        filtered = []
+        ignore_words = {
+            "namirnica",
+            "alergen",
+            "alergeni",
+            "info",
+            "sadrze",
+            "koje",
+        }
+        for w in header_words:
+            token = normalize_for_match(w["text"])
+            if token in ignore_words:
+                continue
+            filtered.append(w)
+
+        filtered.sort(key=lambda w: w["x0"])
+        clusters: List[List[Dict]] = []
+        for word in filtered:
+            if not clusters:
+                clusters.append([word])
+                continue
+            last_center = (clusters[-1][0]["x0"] + clusters[-1][0]["x1"]) / 2
+            current_center = (word["x0"] + word["x1"]) / 2
+            if abs(current_center - last_center) <= 25:
+                clusters[-1].append(word)
+            else:
+                clusters.append([word])
+
+        col_centers = [
+            sum((w["x0"] + w["x1"]) / 2 for w in cluster) / len(cluster) for cluster in clusters
+        ]
+
+        if not col_centers:
+            return header, []
+
+        new_header = []
+        for cluster in clusters:
+            cluster.sort(key=lambda w: (w["top"], w["x0"]))
+            label = clean_spaces(" ".join(w["text"] for w in cluster))
+            new_header.append(label)
+
+        header = new_header if new_header else header
+        items: List[Dict] = []
+        name_boundary = min(col_centers) - 8
+
+        last_item: Optional[Dict] = None
+        for line in lines[header_idx + len(header_lines) :]:
+            tokens = [w["text"] for w in line]
+            if not tokens:
+                continue
+            stars = [w for w in line if "*" in w["text"]]
+            name_words = [w for w in line if w["x0"] < name_boundary and "*" not in w["text"]]
+            name = clean_spaces(" ".join(w["text"] for w in name_words))
+
+            if not name and last_item and not stars:
+                tail = clean_spaces(" ".join(t for t in tokens if "*" not in t))
+                if tail:
+                    last_item["name"] = clean_spaces(f"{last_item['name']} {tail}")
+                continue
+
+            if not name and not stars:
+                continue
+
+            flags = [False] * len(col_centers)
+            for star in stars:
+                star_center = (star["x0"] + star["x1"]) / 2
+                idx = min(range(len(col_centers)), key=lambda i: abs(col_centers[i] - star_center))
+                if abs(col_centers[idx] - star_center) <= 35:
+                    flags[idx] = True
+
+            item = {"name": name or clean_spaces(" ".join(tokens)), "flags": flags}
+            items.append(item)
+            last_item = item
+
+        return header, items
+
+    header: Optional[List[str]] = None
+    items: List[Dict] = []
+    with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
+        for page in pdf.pages:
+            tables = extract_tables(page)
+            parsed = False
+            for table in tables:
+                rows = [[normalize_cell(cell) for cell in row] for row in table if row]
+                if not rows:
+                    continue
+                header_row = None
+                for row in rows:
+                    if is_header_row(row):
+                        header_row = row
+                        break
+                if header_row:
+                    header = [normalize_cell(cell) for cell in header_row if cell]
+                    header = header[1:] if header and "namirnica" in normalize_for_match(header[0]) else header
+                    for row in rows[rows.index(header_row) + 1 :]:
+                        parsed_row = parse_table_row(row, header)
+                        if parsed_row:
+                            items.append(parsed_row)
+                    parsed = True
+                    break
+            if parsed:
+                continue
+
+            header, page_items = parse_by_positions(page, header)
+            items.extend(page_items)
+
+    allergens = header or []
+    normalized_items = []
+    for item in items:
+        flags = item.get("flags", [])
+        contains = [allergens[i] for i, flag in enumerate(flags) if flag and i < len(allergens)]
+        normalized_items.append(
+            {
+                "name": item.get("name", ""),
+                "flags": flags,
+                "contains": contains,
+            }
+        )
+
+    return {"allergens": allergens, "items": normalized_items}
 
 
 def write_json(path: pathlib.Path, data: Dict) -> None:
