@@ -90,5 +90,5 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add .
-          git commit -m "json refresh $(date -u '+%Y-%m-%d %H:%M UTC')"
+          git commit -m "json auto refresh from git workflow - $(date -u '+%Y-%m-%d %H:%M UTC')"
           git push
