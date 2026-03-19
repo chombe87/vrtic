@@ -3,8 +3,8 @@ name: Fetch menu data
 on:
   workflow_dispatch:
   schedule:
-    # Every 8 hours
-    - cron: "0 */8 * * *"
+    # Weekdays, every hour from 04:00 to 23:00 UTC
+    - cron: "0 4-23 * * 1-5"
 
 permissions:
   contents: write
@@ -28,12 +28,51 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+      - name: Decide target month/year
+        id: target
+        run: |
+          set -euo pipefail
+          current_month="$(date -u +%m)"
+          current_year="$(date -u +%Y)"
+
+          tomorrow_weekday="$(date -u -d "tomorrow" +%u)"
+          tomorrow_month="$(date -u -d "tomorrow" +%m)"
+
+          use_next="false"
+
+          # If tomorrow is a weekday and in the next month, switch to next month.
+          if [[ "$tomorrow_weekday" -ge 1 && "$tomorrow_weekday" -le 5 && "$tomorrow_month" != "$current_month" ]]; then
+            use_next="true"
+          fi
+
+          # If it's Friday after 16:00 UTC and the next Monday is in the next month,
+          # prefetch next month before the weekend.
+          weekday="$(date -u +%u)"
+          hour="$(date -u +%H)"
+          next_monday_month="$(date -u -d "next monday" +%m)"
+          if [[ "$weekday" -eq 5 && "$hour" -ge 16 && "$next_monday_month" != "$current_month" ]]; then
+            use_next="true"
+          fi
+
+          target_month="$current_month"
+          target_year="$current_year"
+          if [[ "$use_next" == "true" ]]; then
+            next_month_date="$(date -u -d "$(date -u +%Y-%m-01) +1 month" +%Y-%m-01)"
+            target_month="$(date -u -d "$next_month_date" +%m)"
+            target_year="$(date -u -d "$next_month_date" +%Y)"
+          fi
+
+          # Strip leading zero for numeric month argument
+          target_month=$((10#$target_month))
+
+          echo "year=$target_year" >> "$GITHUB_OUTPUT"
+          echo "month=$target_month" >> "$GITHUB_OUTPUT"
+          echo "use_next=$use_next" >> "$GITHUB_OUTPUT"
+
       - name: Run fetch script
         run: |
-          YEAR=$(date -u +%Y)
-          MONTH=$(date -u +%m)
-          MONTH=$((10#$MONTH))
-          python fetch_menu.py --year "$YEAR" --month "$MONTH" --output-dir data
+          echo "Using month=${{ steps.target.outputs.month }} year=${{ steps.target.outputs.year }} (use_next=${{ steps.target.outputs.use_next }})"
+          python fetch_menu.py --year "${{ steps.target.outputs.year }}" --month "${{ steps.target.outputs.month }}" --output-dir data
 
       - name: Commit and push if needed
         run: |
