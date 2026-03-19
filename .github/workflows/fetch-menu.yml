@@ -1,0 +1,55 @@
+name: Fetch menu data
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Every 8 hours
+    - cron: "0 */8 * * *"
+
+permissions:
+  contents: write
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run fetch script
+        run: |
+          YEAR=$(date -u +%Y)
+          MONTH=$(date -u +%m)
+          MONTH=$((10#$MONTH))
+          python fetch_menu.py --year "$YEAR" --month "$MONTH" --output-dir data
+
+      - name: Commit and push if needed
+        run: |
+          if [[ -z "$(git status --porcelain)" ]]; then
+            echo "No changes."
+            exit 0
+          fi
+
+          mapfile -t files < <(git status --porcelain | awk '{print $2}')
+          if [[ "${#files[@]}" -eq 1 ]] && { [[ "${files[0]}" == "data/metadata.json" ]] || [[ "${files[0]}" == "metadata.json" ]]; }; then
+            echo "Only metadata.json changed, skipping commit."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add .
+          git commit -m "json refresh $(date -u '+%Y-%m-%d %H:%M UTC')"
+          git push
