@@ -43,6 +43,14 @@ MONTH_SLUGS = {
     12: "decembar",
 }
 
+DATE_RE = re.compile(r"(\d{1,2})\s*[.,]\s*(\d{1,2})\s*[.,]\s*(\d{4})")
+DEFAULT_INGREDIENTS_PDF_URL = (
+    "https://predskolska.rs/wp-content/uploads/2024/12/"
+    "%D0%A1%D0%90%D0%A1%D0%A2%D0%90%D0%92-%D0%9D%D0%90%D0%9C%D0%98%D0%A0"
+    "%D0%9D%D0%98%D0%A6%D0%90-%D0%A3-%D0%88%D0%95%D0%9B%D0%98%D0%9C%D0%90-"
+    "13.12.2024.pdf"
+)
+
 
 def serbian_month_slug(month: int) -> str:
     if month not in MONTH_SLUGS:
@@ -66,6 +74,11 @@ def fetch_html(url: str) -> str:
 
 def clean_spaces(text: str) -> str:
     return re.sub(r"\s+", " ", text).strip()
+
+
+def parse_date_match(match: re.Match[str]) -> str:
+    day, month, year = (int(part) for part in match.groups())
+    return dt.date(year, month, day).isoformat()
 
 
 def normalize_for_match(text: str) -> str:
@@ -109,7 +122,6 @@ def parse_menu_changes(html: str) -> Dict:
     container = soup.select_one("article .entry-content") or soup
     lines = [clean_spaces(t) for t in container.stripped_strings if clean_spaces(t)]
 
-    date_re = re.compile(r"(\d{2}\.\d{2}\.\d{4})")
     entries: List[Dict] = []
     current_day: Optional[Dict] = None
     last_meal: Optional[Dict] = None
@@ -118,9 +130,9 @@ def parse_menu_changes(html: str) -> Dict:
         if line.upper().startswith("IZMENA JELOVNIKA") or line.startswith("ИЗМЕНА"):
             continue
 
-        date_match = date_re.search(line)
+        date_match = DATE_RE.search(line)
         if date_match:
-            iso_date = dt.datetime.strptime(date_match.group(1), "%d.%m.%Y").date().isoformat()
+            iso_date = parse_date_match(date_match)
             weekday = line[date_match.end() :].strip(" .")
             current_day = {"date": iso_date, "weekday": weekday, "meals": [], "raw": []}
             entries.append(current_day)
@@ -212,6 +224,33 @@ def find_pdf_urls_after_marker(
     return []
 
 
+def find_pdf_url_by_keywords(html: str, page_url: str, keywords: Iterable[str]) -> Optional[str]:
+    soup = BeautifulSoup(html, "html.parser")
+    container = soup.select_one("article .entry-content") or soup
+    normalized_keywords = [normalize_for_match(k) for k in keywords]
+    lowered_keywords = [k.lower() for k in keywords]
+
+    for link in container.find_all("a", href=True):
+        href = link["href"].strip()
+        if not href or ".pdf" not in href.lower():
+            continue
+
+        text = clean_spaces(link.get_text(" ", strip=True))
+        decoded_href = urllib.parse.unquote(href)
+        normalized_text = normalize_for_match(text)
+        normalized_href = normalize_for_match(decoded_href)
+        lowered_text = text.lower()
+        lowered_href = decoded_href.lower()
+
+        if (
+            any(k in normalized_text or k in normalized_href for k in normalized_keywords)
+            or any(k in lowered_text or k in lowered_href for k in lowered_keywords)
+        ):
+            return urllib.parse.urljoin(page_url, href)
+
+    return None
+
+
 def find_monthly_menu_pdf_url(html: str, page_url: str) -> Optional[str]:
     links = find_pdf_urls_after_marker(
         html,
@@ -281,7 +320,6 @@ def clean_pdf_meal_text(text: str) -> str:
 
 def parse_monthly_menu(pdf_bytes: bytes) -> Dict:
     lines = extract_pdf_lines(pdf_bytes)
-    date_re = re.compile(r"(\d{2}\.\d{2}\.\d{4})")
     days: List[Dict] = []
     current: Optional[Dict] = None
     last_meal: Optional[Dict] = None
@@ -292,11 +330,11 @@ def parse_monthly_menu(pdf_bytes: bytes) -> Dict:
         ):
             continue
 
-        date_match = date_re.search(line)
+        date_match = DATE_RE.search(line)
         if date_match and (not line.strip().startswith(("-", "Д-", "У-", "Р-", "D-", "U-", "R-"))):
             if current:
                 days.append(current)
-            iso_date = dt.datetime.strptime(date_match.group(1), "%d.%m.%Y").date().isoformat()
+            iso_date = parse_date_match(date_match)
             weekday = line[date_match.end() :].strip(" .")
             current = {"date": iso_date, "weekday": weekday, "meals": []}
             last_meal = None
@@ -630,9 +668,9 @@ def main() -> None:
     monthly_menu.update({"source": menu_pdf_url, "year": args.year, "month": args.month})
     write_json(output_dir / "monthly_menu.json", monthly_menu)
 
-    ingredients_pdf_url = args.ingredients_pdf_url or (pdf_links[1] if len(pdf_links) > 1 else None)
+    ingredients_pdf_url = args.ingredients_pdf_url
     if not ingredients_pdf_url:
-        fallback = find_pdf_urls_after_marker(
+        ingredients_pdf_url = find_pdf_url_by_keywords(
             menu_changes_html,
             page_url,
             [
@@ -640,10 +678,14 @@ def main() -> None:
                 "sastav namirnica u jelima",
                 "namirnica",
                 "namirnice",
+                "\u0441\u0430\u0441\u0442\u0430\u0432 \u043d\u0430\u043c\u0438\u0440\u043d\u0438\u0446\u0430",
+                "\u0441\u0430\u0441\u0442\u0430\u0432 \u043d\u0430\u043c\u0438\u0440\u043d\u0438\u0446\u0430 \u0443 \u0458\u0435\u043b\u0438\u043c\u0430",
+                "\u043d\u0430\u043c\u0438\u0440\u043d\u0438\u0446\u0430",
+                "\u043d\u0430\u043c\u0438\u0440\u043d\u0438\u0446\u0435",
             ],
-            max_links=1,
         )
-        ingredients_pdf_url = fallback[0] if fallback else None
+    if not ingredients_pdf_url:
+        ingredients_pdf_url = DEFAULT_INGREDIENTS_PDF_URL
     if not ingredients_pdf_url:
         raise RuntimeError("Nije pronadjen PDF sastava namirnica na stranici i URL nije prosledjen.")
 
@@ -653,7 +695,20 @@ def main() -> None:
     ingredients.update({"source": ingredients_pdf_url})
     write_json(output_dir / "ingredients.json", ingredients)
 
-    allergens_pdf_url = args.allergens_pdf_url or (pdf_links[2] if len(pdf_links) > 2 else None)
+    allergens_pdf_url = args.allergens_pdf_url
+    if not allergens_pdf_url:
+        allergens_pdf_url = find_pdf_url_by_keywords(
+            menu_changes_html,
+            page_url,
+            [
+                "alergen",
+                "alergeni",
+                "alergen info",
+                "informacije o alergenima",
+                "\u0430\u043b\u0435\u0440\u0433\u0435\u043d",
+                "\u0430\u043b\u0435\u0440\u0433\u0435\u043d\u0438",
+            ],
+        )
     if not allergens_pdf_url:
         fallback = find_pdf_urls_after_marker(
             menu_changes_html,
@@ -669,6 +724,8 @@ def main() -> None:
             max_links=1,
         )
         allergens_pdf_url = fallback[0] if fallback else None
+    if not allergens_pdf_url:
+        allergens_pdf_url = pdf_links[2] if len(pdf_links) > 2 else None
     if not allergens_pdf_url:
         raise RuntimeError("Nije pronadjen PDF sa alergen info na stranici i URL nije prosledjen.")
 
